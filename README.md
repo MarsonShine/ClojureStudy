@@ -153,3 +153,282 @@ Clojure 还为四种集合类型提供了字面量语法：
 - 求值列表将调用 `+` 函数，并以 `3` 和 `4` 作为参数
 
 许多编程语言同时拥有语句和表达式，其中语句具有某些状态变化的效果，但不返回值。在 Clojure 中，一切都是表达式，并且都会求值为某个值。某些表达式（但并非大多数）也具有副作用。
+
+现在，让我们考虑一下如何在 Clojure 中交互式地求值表达式。
+
+#### 使用单引用延迟求值
+
+有时，延迟求值是有用的，特别是对符号和列表而言。有些情况下，符号仅仅应该作为符号，而不去查找其引用的内容：
+
+```clojure
+user=> 'x
+x
+```
+
+有时，列表也仅仅是一个数据值的列表（而不是需要求值的代码）：
+
+```clojure
+user=> '(1 2 3)
+(1 2 3)
+```
+
+一个常见的错误是意外地将数据列表当作代码求值：
+
+```clojure
+user=> (1 2 3)
+Execution error (ClassCastException) at user/eval156 (REPL:1).
+class java.lang.Long cannot be cast to class clojure.lang.IFn
+```
+
+暂时不必过于担心引用（`quote`），但在这些内容中，你会偶尔看到它用于避免对符号或列表的求值。
+
+```
+user=>(+ 3 4)
+7
+user=>(+ 10 *1)
+17
+user=>(+ *1 *2)
+24
+```
+
+- `*1`：最后一个结果。
+- `*2`：两个表达式前的结果。
+- `*3`：三个表达式前的结果。
+
+### Clojure 基础
+
+#### def
+
+当你在 REPL 中求值时，保存一些数据以供后用是很有用的。我们可以使用 `def` 来实现：
+
+```clojure
+user=> (def x 7)
+#'user/x
+```
+
+`def` 是一种特殊形式，它在当前命名空间中将符号（`x`）与一个值（`7`）关联起来。这种关联称为“变量”（var）。在实际的 Clojure 代码中，变量通常应该引用一个常量值或一个函数，但在 REPL 中为了方便，通常会反复定义和重新定义它们。
+
+注意上面的返回值是 `#'user/x`——这是一个变量的字面表示：`#'` 后跟带命名空间的符号。`user` 是默认的命名空间。
+
+记住，符号通过查找它们所引用的内容来求值，因此我们只需使用该符号即可取回它的值：
+
+```clojure
+user=> (+ x x)
+14
+```
+
+#### Printing
+
+学习一门语言时，最常做的事情之一就是打印值。Clojure 提供了几种打印值的函数：
+
+|        | 适用于人类阅读 | 可作为数据读取 |
+| ------ | -------------- | -------------- |
+| 换行   | println        | prn            |
+| 不换行 | print          | pr             |
+
+适合人类阅读的形式会将特殊字符（如换行和制表符）转为其打印形式，并省略字符串中的引号。`println` 常用于调试函数或在 REPL 中打印值。`println` 可以接收任意数量的参数，并在每个参数的打印值之间加上空格：
+
+```
+user=> (println "What is this:" (+ 1 2))
+What is this: 3
+```
+
+`println` 函数有副作用（打印），其返回结果为 `nil`。
+
+注意上面 `"What is this:"` 没有打印出引号，这并不是读取器可以再次读取的数据形式。
+
+为此，可以使用 `prn` 以数据形式打印：
+
+```
+user=> (prn "one\n\ttwo")
+"one\n\ttwo"
+```
+
+此时，打印的结果是一个有效形式，读取器可以再次读取。根据上下文，你可以选择更适合人类阅读的形式或数据形式。
+
+### 测试题
+
+1.Using the REPL, compute the sum of 7654 and 1234.
+
+```
+user=> (+ 7654 1234)
+```
+
+2.Rewrite the following algebraic expression as a Clojure expression: ( 7 + 3 * 4 + 5 ) / 10.
+
+```
+user=>(/ (+ (+ (* 3 4) 7) 5) 10)
+```
+
+3.Using REPL documentation functions, find the documentation for the `rem` and `mod` functions. Compare the results of the provided expressions based on the documentation.
+
+```
+user=> doc rem
+doc mod
+```
+
+4.Using `find-doc`, find the function that prints the stack trace of the most recent REPL exception.
+
+```
+(find-doc "stack")
+```
+
+## 函数
+
+### 创建函数
+
+Clojure 是一门函数式语言。函数是第一类对象，可以作为参数传递给其他函数或从其他函数返回。大多数 Clojure 代码主要由纯函数（无副作用）组成，因此相同的输入总是产生相同的输出。
+
+`defn` 用于定义一个命名函数：
+
+```clojure
+;;    name   params         body
+;;    -----  ------  -------------------
+(defn greet  [name]  (str "Hello, " name) )
+```
+
+此函数只有一个参数 `name`，不过你可以在参数向量中包含任意数量的参数。
+
+调用函数时，将函数名放在“函数位置”（列表的第一个元素）即可：
+
+```clojure
+user=> (greet "students")
+"Hello, students"
+```
+
+#### 多参函数
+
+函数可以定义为接受不同数量的参数（不同“参数数量”）。不同的参数数量必须在同一个 `defn` 中定义——如果多次使用 `defn` 定义相同函数名，会覆盖前一个定义。
+
+每种参数数量的定义格式为 `([参数*] 表达式*)`。一个参数数量的定义可以调用另一个。函数体可以包含任意数量的表达式，返回值是最后一个表达式的结果。
+
+```
+(defn messenger
+  ([]     (messenger "Hello world!"))
+  ([msg]  (println msg)))
+```
+
+例如，这个函数声明了两个参数数量（0个参数和1个参数）。0参数的形式会调用1参数形式，并使用一个默认值进行打印。我们通过传入相应数量的参数来调用这些函数：
+
+```clojure
+user=> (messenger)
+Hello world!
+nil
+
+user=> (messenger "Hello class!")
+Hello class!
+nil
+```
+
+> 类似于 C# 中的函数重载
+
+#### 可变参数函数
+
+函数还可以定义为接受不定数量的参数——这称为“可变参数”函数。可变参数必须放在参数列表的末尾，并会被收集到一个序列中供函数使用。
+
+可变参数的起始由 `&` 标记。
+
+```clojure
+(defn hello [greeting & who]
+  (println greeting who))
+```
+
+例如，此函数接收一个参数 `greeting` 和不定数量的参数（0个或更多），这些可变参数将被收集到名为 `who` 的列表中。我们可以通过传入三个参数来调用它：
+
+```clojure
+user=> (hello "Hello" "world" "class")
+Hello (world class)
+```
+
+可以看到，当 `println` 打印 `who` 时，它被打印为一个包含两个元素的列表。
+
+#### 匿名函数
+
+匿名函数可以通过 `fn` 创建：
+
+```clojure
+;;    params         body
+;;   ---------  -----------------
+(fn  [message]  (println message) )
+```
+
+由于匿名函数没有名称，因此无法在以后引用它。通常，匿名函数会在将其传递给另一个函数时创建。
+
+也可以立即调用它（这种用法不常见）：
+
+```clojure
+;;     operation (function)             argument
+;; --------------------------------  --------------
+(  (fn [message] (println message))  "Hello world!" )
+
+;; Hello world!
+```
+
+在这里，我们将匿名函数定义在一个更大表达式的函数位置，并直接用参数调用它。
+
+在许多编程语言中，语句用于执行操作但不返回值，而表达式则返回值。而在 Clojure 中，所有代码块都是表达式，都会返回一个值，即使是像 `if` 这样的流程控制语句。
+
+##### defn vs fn
+
+可以将 `defn` 看作是 `def` 和 `fn` 的结合体。`fn` 定义了一个函数，而 `def` 将这个函数绑定到一个名称上。以下两种写法是等效的：
+
+```clojure
+(defn greet [name] (str "Hello, " name))
+
+(def greet (fn [name] (str "Hello, " name)))
+```
+
+#### 匿名函数语法
+
+Clojure 读取器实现了一种更简洁的匿名函数语法：`#()`。这种语法省略了参数列表，并根据参数的位置为它们命名。
+
+- `%` 用于单个参数
+- `%1`、`%2`、`%3` 等用于多个参数
+- `%&` 用于剩余的（可变）参数
+
+由于嵌套匿名函数会导致参数命名的歧义，因此不允许嵌套使用这种语法。
+
+```clojure
+;; Equivalent to: (fn [x] (+ 6 x))
+#(+ 6 %)
+
+;; Equivalent to: (fn [x y] (+ x y))
+#(+ %1 %2)
+
+;; Equivalent to: (fn [x y & zs] (println x y zs))
+#(println %1 %2 %&)
+```
+
+#### 陷阱
+
+一个常见需求是创建一个匿名函数，它接收一个元素并将其包装到一个向量中。你可能会尝试这样写：
+
+```clojure
+;; DO NOT DO THIS
+#([%])
+```
+
+这个匿名函数实际展开后等效于：
+
+```clojure
+(fn [x] ([x]))
+```
+
+> 在这里：
+>
+> - `([x])` 的意思是：构建一个包含 `x` 的向量，并尝试调用它。然而，在 Clojure 中，`([x])` 不是合法的写法，因为 **`([x])` 意图调用一个向量**，但向量不能作为函数被调用。
+> - 因此，这种写法会导致程序出错。
+
+这种形式会将元素包装到一个向量中，但也会尝试用一个空参数调用该向量（多出来的一对圆括号）。正确的写法是：
+
+```clojure
+;; Instead do this:
+#(vector %)
+
+;; or this:
+(fn [x] [x])
+
+;; or most simply just the vector function itself:
+vector
+```
+
