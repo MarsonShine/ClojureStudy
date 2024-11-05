@@ -1380,3 +1380,95 @@ user=> (for [letter [:a :b]
 > `with-open` 是 Clojure 中的一个宏，用于**简化资源的打开和关闭操作**，特别是对于实现了 `java.io.Closeable` 接口的资源（如文件、流、读者、写者等）。它能够确保在代码块执行完毕后，无论是否发生异常，都能自动地关闭所使用的资源，避免资源泄漏。
 
 > PS: 这个有点像 c# 的 using 语句。
+
+## 命名空间
+
+### 命名空间和名称
+
+命名空间提供了一种组织代码和名称的方法。它们让我们可以为函数或其他值指定新的、明确的名称。由于这些全名包含上下文，通常会较长，因此命名空间也提供了一种方法，可以用更短且易输入的名称来唯一地引用其他函数和值的名称。
+
+命名空间既是一个名称上下文，也是一个变量的容器。命名空间名称是用符号表示的，其中部分名称之间用点号分隔，例如 `clojure.string`。按照惯例，命名空间名称通常为小写，并使用 `-` 分隔单词，但这不是必须的。
+
+### Vars（变量）
+
+Vars 是名称（符号）与值之间的关联。命名空间中的 Vars 有一个完全限定的名称，它是命名空间名称和 Var 名称的组合。例如，`clojure.string/join` 是一个完全限定的 Var 名称，其中 `clojure.string` 指的是命名空间，`join` 指的是命名空间中的 Var。所有 Vars 都可以通过其完全限定的名称全局访问。按照惯例，Var 名称为小写，单词之间用 `-` 分隔，但这也不是必须的。Var 名称可以包含大多数非空白字符。
+
+Vars 可以通过 `def` 和其他以 `def` 开头的特殊形式或宏（如 `defn`）来创建。Vars 在“当前”命名空间中创建。Clojure 运行时通过变量 `clojure.core/*ns*` 跟踪当前命名空间。可以使用 `in-ns` 函数来更改当前命名空间。
+
+### 加载
+
+除了提供一个命名上下文外，命名空间名称还提供了一个约定，用于确定代码应该在哪里找到并加载。路径基于命名空间名称创建：
+
+- `.`点号变为目录分隔符
+- `-`连字符变为下划线
+- 添加文件扩展名 `.clj`
+
+因此，命名空间名称 `com.some-example.my-app` 变成加载路径 `com/some_example/my_app.clj`。加载路径在 JVM 类路径中搜索。类路径是一系列目录位置或 JAR 文件（JAR 本质上就是压缩文件）。
+
+当需要资源时，JVM 按顺序在 `classpath(类路径)` 的每个位置搜索加载路径的相对位置的文件。例如，如果类路径是 `src:test`，加载路径会先检查 `src/com/some_example/my_app.clj`，然后是 `test/com/some_example/my_app.clj`。
+
+在 Clojure 中有多种加载代码的方法，但最常用的是通过 `require` 来加载。
+
+由于这种加载约定，大多数 Clojure 代码结构遵循命名空间与文件一一对应的方式，文件以层次结构存储，映射到命名空间结构。
+
+### 申明命名空间
+
+大多数 Clojure 文件表示单个命名空间，并在文件顶部使用 `ns` 宏声明该命名空间的依赖，通常如下所示：
+
+```clojure
+(ns com.some-example.my-app
+  "My app example"
+  (:require
+    [clojure.set :as set]
+    [clojure.string :as str]))
+```
+
+`ns` 宏指定命名空间名称（应根据上文约定匹配文件路径位置），一个可选的文档字符串，然后是一个或多个声明命名空间信息的子句。
+
+### 引用（Refer）
+
+默认情况下，可以直接引用或调用当前命名空间中的 Vars，而不需指定命名空间（当前命名空间为“默认”）。此外，你可能已经注意到，我们通常可以直接引用 `clojure.core` 库函数，而无需完全限定它们的名称。原因是 `clojure.core` 库中的所有 Vars 都已被引用到当前命名空间。`refer` 会在当前命名空间的符号表中创建一个指向其他命名空间中 Var 的条目。
+
+`clojure.core` 的引用由 `ns` 宏自动完成。（可以部分禁用这种行为，以便在不产生警告的情况下重用 `core` 中的名称。）
+
+### `require`
+
+`:require` 子句对应 `require` 函数，用于指定该命名空间依赖加载的一个或多个命名空间。对于每个命名空间，`require` 可以执行以下操作：
+
+- 加载（或重新加载）命名空间
+- 可选择分配一个别名，用于仅在当前命名空间中引用加载的命名空间的 Vars
+- 可选择引用加载的命名空间中的特定 Vars，使它们在当前命名空间中可以通过不带命名空间的名称直接使用
+
+最后两个选项都是为了使名称使用更便捷。虽然总可以通过完全限定名称引用Vars，但在代码中很少需要使用完全限定名称。别名允许使用较短的版本来代替更长的完全限定名称。`refer` 则允许在当前命名空间中使用不带命名空间前缀的名称。
+
+在 `require` 中，命名空间的形式通常有以下四种：
+
+- `clojure.set` - 仅加载 `clojure.set` 命名空间（如果尚未加载）。
+
+- `[clojure.set :as set]` - 加载并为 `clojure.set` 命名空间创建一个别名 `set`。
+   - 这允许使用 `set/union` 代替 `clojure.set/union` 来引用 `set` 中的Vars。
+
+- `[clojure.set :refer [union intersection]]` - 加载并将特定的Vars引入当前命名空间。
+   - 这允许使用 `union` 而非 `clojure.set/union`。
+
+- `[company.application.component.user :as-alias user]` - 为 `company.application.component.user` 命名空间创建别名 `user`，但不加载该命名空间。
+   - 通常使用 `:as-alias` 时，该命名空间只是作为限定符使用，并不是一个可加载的命名空间。
+   - 这允许在创建映射时使用简写作为命名空间限定符，例如：`{::user/id 1}`；注册规范时：`(s/def ::user/id int?)`；或解构时：`(defn find-by-id [{::user/keys [id]}] ...)`。
+
+### Java 类和导入
+
+除了 Vars，Clojure 还提供对 Java 的互操作支持以及对 Java 类的访问，这些类存在于包中。Java 类可以通过完全限定类名来引用，例如 `java.util.Date`。
+
+`ns` 宏还会导入 `java.lang` 包中的类，以便可以直接使用类名，而无需使用完全限定类名。例如，可以直接使用 `String` 而不是 `java.lang.String`。
+
+类似于 `:refer`，`ns` 宏还有一个 `:import` 子句（由 `import` 宏支持），可以导入其他类，从而使用不带限定名的类：
+
+```clojure
+(ns my.namespace
+  (:import 
+    [java.util Date UUID]
+         [java.io File]))
+```
+
+此示例导入了 `java.util` 包中的 `Date` 和 `UUID` 类，以及 `java.io` 包中的 `File` 类。
+
